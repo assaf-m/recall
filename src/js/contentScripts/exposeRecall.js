@@ -16,5 +16,5 @@ function checkForDOM() {
     }
 }
 
-console.log('exposed recall');
+console.debug('RECALL - extension initiated');
 requestIdleCallback(checkForDOM);

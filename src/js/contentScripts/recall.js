@@ -1,21 +1,38 @@
 import Pretender from 'pretender';
 import objectHash from 'object-hash';
+import {requestsStore} from "./db";
+
 
 let pretenderServer;
 let hashedRequests = {};
-let hashToUrl = {};
+const hashToUrl = {};
 
-export const createRecall = () => {
-    console.debug(`RECALL - recreating mock repsonses with this map:`);
-    console.debug(JSON.stringify(hashedRequests));
 
+const createHashedRequestsMap = async () => {
+    const newHashedRequests = {};
+    const result = await requestsStore.getAll();
+    result.forEach(({verb, response, requestHash}) => {
+        newHashedRequests[requestHash] = {verb, response}
+    });
+    return newHashedRequests;
+};
+
+const shortenParams = request => request.requestBody && request.requestBody.length > 100 ? request.requestBody.slice(0,100) : request.requestBody
+
+export const createRecall = async () => {
+    console.debug('RECALL - createRecall');
+    hashedRequests = {};
+    const tempHashedRequests = await createHashedRequestsMap();
+    console.debug('RECALL - before  pretenderServer shutdown')
     pretenderServer && pretenderServer.shutdown();
+    console.debug('RECALL - before  pretenderServer init')
     pretenderServer = new Pretender(function() {
-        Object.keys(hashedRequests).forEach(hashedRequest => {
-            const {verb, response} = hashedRequests[hashedRequest];
+        Object.keys(tempHashedRequests).forEach(hashedRequest => {
+            const {verb, response} = tempHashedRequests[hashedRequest];
             this[verb.toLowerCase()](hashedRequest, req => [200, {'content-type': 'application/javascript'}, response]);
         });
     });
+    console.debug('RECALL - after  pretenderServer init')
 
 
     // overriding fetch is required in order to make apollo-client work w/ pretender:
@@ -30,20 +47,20 @@ export const createRecall = () => {
         pretenderServer.originalShutdown(...arguments);
     };
 
-    pretenderServer.unhandledRequest = function(verb, path, request) {
+    pretenderServer.unhandledRequest = async function(verb, path, request) {
         const requestHash = objectHash({verb, path, body: request.requestBody});
-        console.debug(`RECALL - new request: ${verb}:${path}, with params: ${request.requestBody}`);
+        //console.debug(`RECALL - new request: ${verb}:${path}, with params: ${request.requestBody}`);
+;
+        console.debug(`RECALL - new request: ${verb}:${path}, with params: ${shortenParams(request)}`);
         const xhr = request.passthrough(); // <-- A native, sent xhr is returned
-        xhr.onloadend = (ev) => {
-            hashedRequests[requestHash] = {verb, response: xhr.response};
-            console.debug(`RECALL - server response for ${verb}:${path} --- ${xhr.response}`)
-            console.debug(xhr.response);
+        xhr.onloadend = async (ev) => {
+            await requestsStore.set(requestHash, {verb, response: xhr.response, requestHash, path});
             createRecall();
         };
     };
 
     pretenderServer.handledRequest = function(verb, path, request) {
-        console.debug(`RECALL - return cached response for ${verb}:${request._recallUrl}, with params: ${request.requestBody}`)
+        console.debug(`RECALL - return cached response for ${verb}:${request._recallUrl}, with params: ${shortenParams(request)}`)
     };
 
 
@@ -55,6 +72,7 @@ export const createRecall = () => {
         const requestHash = objectHash({verb: options.method, path: url, body: options.body});
         hashToUrl[requestHash] = url;
         if(requestHash in hashedRequests){
+            console.debug(`RECALL - fetch: ${url} --- ${requestHash}`);
             url = requestHash;
         }
         return pretenderFetch(url, options);
@@ -71,11 +89,13 @@ export const createRecall = () => {
         params = params || null;
         const requestHash = objectHash({verb: this._recallVerb, path: this._recallUrl, body: params});
         if(requestHash in hashedRequests){
+            console.debug(`RECALL - xhr send: ${this._recallUrl} --- ${requestHash}`)
             this.url = requestHash;
         }
-
         pretenderXhrSend.apply(this, arguments);
-    }
+    };
+
+    hashedRequests = tempHashedRequests;
 };
 
 
