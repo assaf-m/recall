@@ -28,7 +28,11 @@ const generateStoreApi = (dbName, storeName) => {
             return (await dbPromise).getAllKeys(storeName);
         },
         getAll: async () => {
-            return (await dbPromise).getAll(storeName);
+            const start = Date.now();
+            return (await dbPromise).getAll(storeName).then(res => {
+                console.debug(`RECALL - indexeddb latency - getall: ${Date.now() - start}`)
+                return res;
+            });
         },
     }
 };
