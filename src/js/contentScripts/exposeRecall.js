@@ -53,11 +53,8 @@ function updateSharedState(recallState){
 }
 
 function sendClearRequestsInstruction() {
-    console.log(' sendClearRequestsInstruction')
+    console.log('RECALL - clear requests')
     const el = document.getElementById(recallSharedStateElId);
-    if(el){
-        console.log('yesh')
-    }
     el.setAttribute('recall-clear-requests','')
 };
 
@@ -82,22 +79,3 @@ async function init(){
     await init()
 })();
 
-
-
-/*
-chrome.runtime.onMessage.addListener(
-    function(request, sender, sendResponse) {
-        // console.log(sender.tab ?
-        //     "from a content script:" + sender.tab.url :
-        //     "from the extension");
-        // if (request.greeting == "hello")
-        //     sendResponse({farewell: "goodbye"});
-
-        debugger
-        console.log(`RECALL - debugggg`);
-        console.log(request);
-        console.log(sender)
-
-    }
-);
-*/

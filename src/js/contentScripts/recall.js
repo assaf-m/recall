@@ -2,8 +2,6 @@ import Pretender from 'pretender';
 import objectHash from 'object-hash';
 import {requestsStore} from "./db";
 
-const start = Date.now();
-console.debug(`Recall pretenderServer init start ${start}`);
 const recallSharedStateElId = '__recall';
 let recallState;
 let pretenderServer;
@@ -33,10 +31,6 @@ const clearRequestsIfNeeded = async () => {
         }
         el.removeAttribute('recall-clear-requests')
     }
-
-
-
-
 };
 
 const reloadRecallConfig = async () => {
@@ -67,6 +61,7 @@ const readInitialRecallState = async () => {
 const createPretenderServer = () => {
   pretenderServer && pretenderServer.shutdown();
   pretenderServer =  new Pretender(function() {
+
       this.unhandledRequest = async function(verb, path, request) {
           const requestHash = objectHash({verb, path, body: request.requestBody});
           console.debug(`RECALL - new request: ${verb}:${path}, with params: ${shortenParams(request)}`);
@@ -75,6 +70,10 @@ const createPretenderServer = () => {
               pretenderServer[verb.toLowerCase()](requestHash, req => [200, {'content-type': 'application/javascript'}, xhr.response]);
               requestsStore.set(requestHash, {verb, response: xhr.response, requestHash, path});
           };
+      };
+
+      this.handledRequest = function(verb, path, request) {
+          console.debug(`RECALL - return cached response for ${verb}:${request._recallUrl}, with params: ${shortenParams(request)}`)
       };
   });
 };
@@ -85,26 +84,13 @@ const registerPathsFromDb = async () => {
         pretenderServer[verb.toLowerCase()](requestHash, req => [200, {'content-type': 'application/javascript'}, response]);
         console.log(`RECALL - register new api cache for ${verb}:${path} , requestHash ${requestHash}`);
     });
-}
-
-
-const end = Date.now();
-console.log(`Recall pretenderServer init end ${end}`);
-console.log(`Recall pretenderServer init ${end - start}`);
-
-
-const isApiRequestRegistered = ({verb, url}) => {
-    const match =  pretenderServer._handlerFor(verb, url, {});
-    return match
 };
 
-const shortenParams = request => request.requestBody && request.requestBody.length > 100 ? request.requestBody.slice(0,100) : request.requestBody
+const isApiRequestRegistered = ({verb, url}) => pretenderServer._handlerFor(verb, url, {});
 
-export const createRecall = async () => {
-    createPretenderServer();
-    await registerPathsFromDb();
+const shortenParams = request => request.requestBody && request.requestBody.length > 100 ? request.requestBody.slice(0,100) : request.requestBody;
 
-    //console.debug('RECALL - after  pretenderServer init')
+const apolloClientFetchMonkeyPatch = () => {
     // overriding fetch is required in order to make apollo-client work w/ pretender:
     // https://github.com/pretenderjs/pretender/issues/60
     // https://github.com/apollostack/apollo-client/issues/269
@@ -116,16 +102,10 @@ export const createRecall = async () => {
         window.fetch = pretenderServer._ogFetch;
         pretenderServer.originalShutdown(...arguments);
     };
+};
 
-    pretenderServer.handledRequest = function(verb, path, request) {
-        console.debug(`RECALL - return cached response for ${verb}:${request._recallUrl}, with params: ${shortenParams(request)}`)
-    };
-
-
+const moneyPatchPretenderFetch = () => {
     let pretenderFetch  = window.fetch;
-    let pretenderXhrOpen = XMLHttpRequest.prototype.open;
-    let pretenderXhrSend = XMLHttpRequest.prototype.send;
-
     window.fetch = async function(url, options){
         const verb = options && options.method || "GET";
         const requestHash = objectHash({verb, path: url, body: options.body});
@@ -137,6 +117,11 @@ export const createRecall = async () => {
         }
         return pretenderFetch(url, options);
     };
+};
+
+const monkeyPatchPretenderXhr = () => {
+    let pretenderXhrOpen = XMLHttpRequest.prototype.open;
+    let pretenderXhrSend = XMLHttpRequest.prototype.send;
 
     XMLHttpRequest.prototype.open = function(verb, url){
         this._recallVerb = verb;
@@ -151,23 +136,21 @@ export const createRecall = async () => {
 
         const apiRequestRegistered = isApiRequestRegistered({verb: this._recallVerb, url: requestHash});
         if(apiRequestRegistered){
-            //console.debug(`RECALL - xhr send: ${this._recallUrl} --- ${requestHash}`)
             this.url = requestHash;
         }
         pretenderXhrSend.apply(this, arguments);
     };
+};
 
-
+export const createRecall = async () => {
+    createPretenderServer();
+    await registerPathsFromDb();
+    apolloClientFetchMonkeyPatch();
+    moneyPatchPretenderFetch();
+    monkeyPatchPretenderXhr();
 };
 
 
-
 (async () => {
-    const start = Date.now();
-    console.debug(`Recall script load start ${start}`);
     await readInitialRecallState();
-    //await createRecall();
-    const end = Date.now();
-    console.debug(`Recall script load end ${end}`);
-    console.debug(`Recall script load latency ${end - start}`)
 })();

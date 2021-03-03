@@ -19,8 +19,6 @@ const registerOnOffHandler = () => {
         const enabled = el.checked;
         await loadRecallState();
         recallState.enabled = enabled;
-        console.log('new recallstate')
-        console.log(recallState);
         await setRecallState(recallState);
         await messageRecallStateToDOM();
     });
