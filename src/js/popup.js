@@ -1,7 +1,8 @@
 import "../css/popup.css";
-import {loadRecallState, setRecallState,  messageRecallStateToDOM} from "./recallState";
+import {loadRecallState, setRecallState, messageRecallStateToDOM, clearRequests} from "./recallState";
 
 const ON_OFF_SWITCH = 'record-requests';
+const CLEAR_REQUESTS = 'clear-requests';
 
 
 const setRecallStateInPopUp = async () => {
@@ -10,9 +11,6 @@ const setRecallStateInPopUp = async () => {
   console.debug(`Setting recall state in popup: ${JSON.stringify(recallState)}`);
   el.checked = recallState.enabled;
 };
-
-
-
 
 const registerOnOffHandler = () => {
     const el = document.getElementById(ON_OFF_SWITCH);
@@ -29,11 +27,20 @@ const registerOnOffHandler = () => {
 };
 
 
+const registerClearRequestsHandler = () => {
+    const el = document.getElementById(CLEAR_REQUESTS);
+    el.addEventListener('click', function(){
+        clearRequests();
+    });
+};
+
+
 
 
 
 (async () => {
     registerOnOffHandler();
+    registerClearRequestsHandler();
     await setRecallStateInPopUp();
 })();
 

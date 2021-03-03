@@ -36,3 +36,14 @@ export const messageRecallStateToDOM = async () => {
         });
     });
 };
+
+
+export const clearRequests = () => {
+    console.debug(`clearRequests start`);
+    console.debug(`clearRequests - starting communication with content script`);
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+        chrome.tabs.sendMessage(tabs[0].id, {action: ACTIONS.CLEAR_REQUESTS}, function(response) {
+            console.debug(`clearRequests - response from DOM: ${response}`)
+        });
+    });
+};

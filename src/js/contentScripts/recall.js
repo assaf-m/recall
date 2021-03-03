@@ -3,7 +3,7 @@ import objectHash from 'object-hash';
 import {requestsStore} from "./db";
 
 const start = Date.now();
-console.log(`Recall pretenderServer init start ${start}`);
+console.debug(`Recall pretenderServer init start ${start}`);
 const recallSharedStateElId = '__recall';
 let recallState;
 let pretenderServer;
@@ -12,16 +12,32 @@ const hashToUrl = {};
 
 const actionOnConfigChange = async () => {
   if(!recallState.enabled && pretenderServer){
-      console.log(`RECALL - stopping recall extension!!!`)
+      console.debug(`RECALL - stopping requests caching`);
       pretenderServer.shutdown();
       pretenderServer = null;
   }
   else if(recallState.enabled && !pretenderServer){
-      console.log(`RECALL - starting extension again!`)
+      console.debug(`RECALL - starting requests caching`);
       await createRecall();
   }
 };
 
+const clearRequestsIfNeeded = async () => {
+    const el = document.getElementById(recallSharedStateElId);
+    const shouldClear = el.hasAttribute('recall-clear-requests');
+    if(shouldClear){
+        await requestsStore.clear();
+        if(recallState.enabled){
+            createPretenderServer();
+            await registerPathsFromDb();
+        }
+        el.removeAttribute('recall-clear-requests')
+    }
+
+
+
+
+};
 
 const reloadRecallConfig = async () => {
   const el = document.getElementById(recallSharedStateElId);
@@ -38,16 +54,18 @@ const readInitialRecallState = async () => {
     if(!el){
         console.error('RECALL - missing initial state!');
     }
-    const observer = new MutationObserver(function(mutationsList, observer) {
-        reloadRecallConfig();
+    const observer = new MutationObserver(async function(mutationsList, observer) {
+        await reloadRecallConfig();
+        await clearRequestsIfNeeded();
     });
-    observer.observe(el, {characterData: false, childList: true, attributes: false});
+    observer.observe(el, {characterData: false, childList: true, attributes: true});
     await reloadRecallConfig();
 
 };
 
 
 const createPretenderServer = () => {
+  pretenderServer && pretenderServer.shutdown();
   pretenderServer =  new Pretender(function() {
       this.unhandledRequest = async function(verb, path, request) {
           const requestHash = objectHash({verb, path, body: request.requestBody});
@@ -60,6 +78,14 @@ const createPretenderServer = () => {
       };
   });
 };
+
+const registerPathsFromDb = async () => {
+    const results = await requestsStore.getAll();
+    results.forEach(({requestHash, response, verb, path}) => {
+        pretenderServer[verb.toLowerCase()](requestHash, req => [200, {'content-type': 'application/javascript'}, response]);
+        console.log(`RECALL - register new api cache for ${verb}:${path} , requestHash ${requestHash}`);
+    });
+}
 
 
 const end = Date.now();
@@ -76,12 +102,7 @@ const shortenParams = request => request.requestBody && request.requestBody.leng
 
 export const createRecall = async () => {
     createPretenderServer();
-
-    const results = await requestsStore.getAll();
-    results.forEach(({requestHash, response, verb, path}) => {
-        pretenderServer[verb.toLowerCase()](requestHash, req => [200, {'content-type': 'application/javascript'}, response]);
-        console.log(`RECALL - register new api cache for ${verb}:${path} , requestHash ${requestHash}`);
-    });
+    await registerPathsFromDb();
 
     //console.debug('RECALL - after  pretenderServer init')
     // overriding fetch is required in order to make apollo-client work w/ pretender:
@@ -143,10 +164,10 @@ export const createRecall = async () => {
 
 (async () => {
     const start = Date.now();
-    console.log(`Recall script load start ${start}`);
+    console.debug(`Recall script load start ${start}`);
     await readInitialRecallState();
     //await createRecall();
     const end = Date.now();
-    console.log(`Recall script load end ${end}`);
-    console.log(`Recall script load latency ${end - start}`)
+    console.debug(`Recall script load end ${end}`);
+    console.debug(`Recall script load latency ${end - start}`)
 })();

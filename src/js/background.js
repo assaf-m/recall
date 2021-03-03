@@ -1,5 +1,3 @@
-import '../img/icon-128.png';
-import '../img/icon-34.png';
 import '../img/lightning.png';
 import {loadRecallState, setRecallState} from "./recallState";
 import {ACTIONS} from "./actions";
@@ -10,7 +8,7 @@ chrome.runtime.onMessage.addListener(
         if(action === ACTIONS.GET_RECALL_STATE){
             console.debug(`RECALL - Content script want to get the recall state`);
             loadRecallState().then(recallState => {
-                console.debug(`RECALL - Got this recallstate, sending back to contentscript ${JSON.stringify(recallState)}`);
+                console.debug(`RECALL - Got this recallState, sending back to content script ${JSON.stringify(recallState)}`);
                 sendResponse(recallState);
             });
         }

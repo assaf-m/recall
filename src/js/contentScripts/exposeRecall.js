@@ -1,5 +1,4 @@
 import {ACTIONS} from "../actions";
-import {loadRecallState} from "../recallState";
 
 function exposeRecall() {
     const recallScript = document.createElement('script');
@@ -20,6 +19,9 @@ function registerRecallStateChange (){
                 console.debug(`RECALL - recall state change from background: ${JSON.stringify(recallState)}`);
                 updateSharedState(recallState);
                 sendResponse({updated: true});
+            }
+            else if(action === ACTIONS.CLEAR_REQUESTS){
+                sendClearRequestsInstruction();
             }
             return true;
         }
@@ -48,8 +50,16 @@ function initSharedState(recallState) {
 function updateSharedState(recallState){
     const el = document.getElementById(recallSharedStateElId);
     el.innerText = JSON.stringify(recallState);
-
 }
+
+function sendClearRequestsInstruction() {
+    console.log(' sendClearRequestsInstruction')
+    const el = document.getElementById(recallSharedStateElId);
+    if(el){
+        console.log('yesh')
+    }
+    el.setAttribute('recall-clear-requests','')
+};
 
 async function getRecallState(){
     return new Promise((resolve) => {

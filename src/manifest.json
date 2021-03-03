@@ -8,9 +8,6 @@
     "default_popup": "popup.html",
     "default_icon": "lightning.png"
   },
-  "icons": {
-    "128": "icon-128.png"
-  },
   "manifest_version": 2,
   "permissions": [
     "storage",
