@@ -4,27 +4,70 @@ import {requestsStore} from "./db";
 
 const start = Date.now();
 console.log(`Recall pretenderServer init start ${start}`);
-
-const pretenderServer   = new Pretender(function() {
-    this.unhandledRequest = async function(verb, path, request) {
-        const requestHash = objectHash({verb, path, body: request.requestBody});
-        console.debug(`RECALL - new request: ${verb}:${path}, with params: ${shortenParams(request)}`);
-        const xhr = request.passthrough(); // <-- A native, sent xhr is returned
-        xhr.onloadend = (ev) => {
-            pretenderServer[verb.toLowerCase()](requestHash, req => [200, {'content-type': 'application/javascript'}, xhr.response]);
-            requestsStore.set(requestHash, {verb, response: xhr.response, requestHash, path});
-        };
-    };
-});
+const recallSharedStateElId = '__recall';
+let recallState;
+let pretenderServer;
 const hashToUrl = {};
+
+
+const actionOnConfigChange = async () => {
+  if(!recallState.enabled && pretenderServer){
+      console.log(`RECALL - stopping recall extension!!!`)
+      pretenderServer.shutdown();
+      pretenderServer = null;
+  }
+  else if(recallState.enabled && !pretenderServer){
+      console.log(`RECALL - starting extension again!`)
+      await createRecall();
+  }
+};
+
+
+const reloadRecallConfig = async () => {
+  const el = document.getElementById(recallSharedStateElId);
+    try {
+        recallState = JSON.parse(el.textContent);
+        await actionOnConfigChange();
+    }
+    catch (e) {}
+};
+
+
+const readInitialRecallState = async () => {
+    const el = document.getElementById(recallSharedStateElId);
+    if(!el){
+        console.error('RECALL - missing initial state!');
+    }
+    const observer = new MutationObserver(function(mutationsList, observer) {
+        reloadRecallConfig();
+    });
+    observer.observe(el, {characterData: false, childList: true, attributes: false});
+    await reloadRecallConfig();
+
+};
+
+
+const createPretenderServer = () => {
+  pretenderServer =  new Pretender(function() {
+      this.unhandledRequest = async function(verb, path, request) {
+          const requestHash = objectHash({verb, path, body: request.requestBody});
+          console.debug(`RECALL - new request: ${verb}:${path}, with params: ${shortenParams(request)}`);
+          const xhr = request.passthrough(); // <-- A native, sent xhr is returned
+          xhr.onloadend = (ev) => {
+              pretenderServer[verb.toLowerCase()](requestHash, req => [200, {'content-type': 'application/javascript'}, xhr.response]);
+              requestsStore.set(requestHash, {verb, response: xhr.response, requestHash, path});
+          };
+      };
+  });
+};
+
 
 const end = Date.now();
 console.log(`Recall pretenderServer init end ${end}`);
-console.log(`Recall pretenderServer init ${end - start}`)
+console.log(`Recall pretenderServer init ${end - start}`);
 
 
 const isApiRequestRegistered = ({verb, url}) => {
-    debugger
     const match =  pretenderServer._handlerFor(verb, url, {});
     return match
 };
@@ -32,6 +75,8 @@ const isApiRequestRegistered = ({verb, url}) => {
 const shortenParams = request => request.requestBody && request.requestBody.length > 100 ? request.requestBody.slice(0,100) : request.requestBody
 
 export const createRecall = async () => {
+    createPretenderServer();
+
     const results = await requestsStore.getAll();
     results.forEach(({requestHash, response, verb, path}) => {
         pretenderServer[verb.toLowerCase()](requestHash, req => [200, {'content-type': 'application/javascript'}, response]);
@@ -39,8 +84,6 @@ export const createRecall = async () => {
     });
 
     //console.debug('RECALL - after  pretenderServer init')
-
-
     // overriding fetch is required in order to make apollo-client work w/ pretender:
     // https://github.com/pretenderjs/pretender/issues/60
     // https://github.com/apollostack/apollo-client/issues/269
@@ -96,10 +139,13 @@ export const createRecall = async () => {
 
 };
 
+
+
 (async () => {
     const start = Date.now();
     console.log(`Recall script load start ${start}`);
-    await createRecall();
+    await readInitialRecallState();
+    //await createRecall();
     const end = Date.now();
     console.log(`Recall script load end ${end}`);
     console.log(`Recall script load latency ${end - start}`)

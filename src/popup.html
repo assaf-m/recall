@@ -5,7 +5,33 @@
   <title></title>
 </head>
 <body>
-  <h1>Hello!</h1>
-  <img src="img/icon-128.png">
+  <style>
+    #title {
+      font-size: 20px;
+      font-weight: bold;
+      padding-bottom: 10px;
+    }
+
+    body {
+      width: 200px;
+    }
+
+  </style>
+
+
+
+  <div id="title">Recall</div>
+  <div>
+    <div class="config">
+      <span>Record HTTP requests</span>
+      <input type="checkbox" id="record-requests" name="record-requests"
+             checked>
+    </div>
+
+    <div class="config">
+      <span>Clear Cached Requests</span>
+      <button>Clear</button>
+    </div>
+  </div>
 </body>
 </html>

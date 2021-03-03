@@ -21,6 +21,7 @@
     "write-file-webpack-plugin": "4.5.1"
   },
   "dependencies": {
+    "@material/switch": "^10.0.0",
     "idb": "^6.0.0",
     "object-hash": "^2.1.1",
     "pretender": "^3.4.3"
